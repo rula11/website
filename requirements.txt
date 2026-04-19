@@ -1,7 +1,5 @@
 flask
 pillow
 gunicorn
-gdown
-
-torch==2.5.1
-torchvision==0.21.0
+onnxruntime
+numpy
