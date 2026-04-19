@@ -1,53 +1,43 @@
 from flask import Flask, request, jsonify
-import torch
-import torch.nn as nn
-from torchvision import models, transforms
+import onnxruntime as ort
+import numpy as np
 from PIL import Image
 
 app = Flask(__name__)
 
 # ======================
-# LOAD MODEL
+# LOAD MODEL (ONNX)
 # ======================
-model = models.resnet50()
+MODEL_PATH = "model.onnx"
 
-model.fc = nn.Sequential(
-    nn.Linear(2048, 256),
-    nn.ReLU(),
-    nn.Dropout(0.5),
-    nn.Linear(256, 1)
-)
-
-import os
-import gdown
-
-MODEL_PATH = "A1-Resnet50.pth"
-
-if not os.path.exists(MODEL_PATH):
-    print("Download model dulu...")
-    gdown.download("https://drive.google.com/uc?id=1KVIVbUwpnlDHcphG7uENc_g6uHnOjhFW", MODEL_PATH, quiet=False)
-
-model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
-model.eval()
+session = ort.InferenceSession(MODEL_PATH)
 
 # ======================
-# TRANSFORM (SAMA SEPERTI TRAINING)
+# PREPROCESS (SAMAKAN DENGAN TRAINING)
 # ======================
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std =[0.229, 0.224, 0.225]
-    )
-])
+def preprocess(image):
+    image = image.resize((224, 224))
+    image = np.array(image).astype(np.float32) / 255.0
+
+    # Normalize (sama seperti training kamu)
+    mean = np.array([0.485, 0.456, 0.406])
+    std  = np.array([0.229, 0.224, 0.225])
+    image = (image - mean) / std
+
+    # HWC → CHW
+    image = np.transpose(image, (2, 0, 1))
+
+    # tambah batch dimension
+    image = np.expand_dims(image, axis=0)
+
+    return image
 
 # ======================
 # ROUTE
 # ======================
 @app.route("/")
 def home():
-    return "API jalan 🚀"
+    return "API ONNX jalan 🚀"
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -56,12 +46,13 @@ def predict():
 
         # baca gambar
         image = Image.open(file.stream).convert("RGB")
-        image = transform(image).unsqueeze(0)
+        input_data = preprocess(image)
 
-        # prediksi
-        with torch.no_grad():
-            output = model(image)
-            prob = torch.sigmoid(output).item()
+        # inference ONNX
+        outputs = session.run(None, {"input": input_data})
+
+        # sigmoid manual (karena output masih logit)
+        prob = 1 / (1 + np.exp(-outputs[0][0][0]))
 
         label = "High" if prob > 0.5 else "Normal"
 
