@@ -18,7 +18,16 @@ model.fc = nn.Sequential(
     nn.Linear(256, 1)
 )
 
-model.load_state_dict(torch.load("A1-Resnet50.pth", map_location="cpu"))
+import os
+import gdown
+
+MODEL_PATH = "A1-Resnet50.pth"
+
+if not os.path.exists(MODEL_PATH):
+    print("Download model dulu...")
+    gdown.download("https://drive.google.com/uc?id=1KVIVbUwpnlDHcphG7uENc_g6uHnOjhFW", MODEL_PATH, quiet=False)
+
+model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
 model.eval()
 
 # ======================
